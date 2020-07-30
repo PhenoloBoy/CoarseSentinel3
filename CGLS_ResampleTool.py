@@ -4,6 +4,8 @@ import os
 import re
 import sys
 
+import dask_image.ndfilters
+from distributed import Client
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -228,8 +230,9 @@ def _date_extr(path):
 
 
 def _resampler(path, my_ext, plot, out_folder):
+    client = Client()
     # Load the dataset
-    ds = xr.open_dataset(path, mask_and_scale=False)
+    ds = xr.open_dataset(path, mask_and_scale=False, chunks={'lat': 1000, 'lon': 1000})
 
     # select parameters according to the product.
     da, param = _param(ds)
@@ -243,19 +246,27 @@ def _resampler(path, my_ext, plot, out_folder):
         # create the mask according to the fixed values
         da_msk = da.where(da <= param['DIGITAL_MAX'])
 
-        # create the coarsen dataset
-        coarsen = da_msk.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).mean()
+        # mask the dataset according to the minumum required values
+        vo = xr.where(da <= param['DIGITAL_MAX'], 1, 0)
+        vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
+
+        gaussina = True
+        if gaussina:
+            da_g = dask_image.ndfilters.gaussian_filter(da_msk.data, sigma=[1, 1])
+            coarsen = xr.DataArray(da_g[1:-1:3, 1:-1:3], coords=[('lat', vo_cnt.lat), ('lon', vo_cnt.lon)])
+
+        else:
+            # create the coarsen dataset
+            coarsen = da_msk.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).mean()
 
         # force results to integer
         coarsen_int = np.rint(coarsen)
 
-        # mask the dataset according to the minumum required values
-        vo = xr.where(da <= param['DIGITAL_MAX'], 1, 0)
-        vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
+        # impose the minimum number of observations
         da_r = coarsen_int.where(vo_cnt >= 5)
 
         # force nan to int
-        da_r = xr.where(np.isnan(da_r), 255, coarsen)
+        da_r = xr.where(np.isnan(da_r), 255, coarsen_int)
 
         # Add time dimension
         da_r = da_r.assign_coords({'time': date_h})
@@ -278,11 +289,16 @@ def _resampler(path, my_ext, plot, out_folder):
         prmts = dict({param['product']: {'dtype': 'i4', 'zlib': 'True', 'complevel': 4}})
 
         name = param['product']
-        if len(my_ext) != 0:
-            file_name = f'CGLS_{name}_{date}_1KM_Resampled_AOI.nc'
+        if not gaussina:
+            if len(my_ext) != 0:
+                file_name = f'CGLS_{name}_{date}_1KM_Resampled_AOI.nc'
+            else:
+                file_name = f'CGLS_{name}_{date}_1KM_Resampled_.nc'
         else:
-            file_name = f'CGLS_{name}_{date}_1KM_Resampled_.nc'
-
+            if len(my_ext) != 0:
+                file_name = f'CGLS_{name}_{date}_1KM_Resampled_G_AOI.nc'
+            else:
+                file_name = f'CGLS_{name}_{date}_1KM_Resampled_G.nc'
         out_file = os.path.join(out_folder, file_name)
 
         da_r.to_netcdf(out_file, encoding=prmts)
