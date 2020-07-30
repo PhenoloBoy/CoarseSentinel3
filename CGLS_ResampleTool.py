@@ -329,10 +329,10 @@ def main():
       through the Register form (on the upper right part of the page)
     '''
 
-    path = r'D:\Data\CGL_subproject_coarse_res\04_ndvi\300\2019\c_gls_NDVI300_201905210000_GLOBE_PROBAV_V1.0.1.nc'
+    path = r'D:\Data\CGL_subproject_coarse_res\04_ndvi\300\2019'
 
     # define the output folder
-    out_folder = r'D:\Data\CGL_subproject_coarse_res\2019\resampled'
+    out_folder = r'F:\EUROPE_2019'
 
     # Define the credential for the Copernicus Global Land repository
     user = ''
@@ -342,7 +342,7 @@ def main():
     # Coordinates are expressed in Decimal degrees (DD)
     # expressed according to [Upper left long, lat, Lower right long, lat] schema
 
-    AOI = []
+    AOI = [-18.58, 62.95, 51.57, 28.5]
 
     # Define if plot results or not
     plot = False
@@ -373,6 +373,7 @@ def main():
 
 if __name__ == '__main__':
     try:
+        print('Copernics Global Land Resampler started')
         main()
     except KeyboardInterrupt:
         print('Process killed by user')
