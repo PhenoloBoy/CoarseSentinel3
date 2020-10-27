@@ -451,6 +451,11 @@ def main():
       If the semiautomatic download is selected as option user ID and password needs to be defined. 
       Credential can be obtained here https://land.copernicus.vgt.vito.be/PDF/portal/Application.html#Home 
       through the Register form (on the upper right part of the page)
+      
+    The default resampling method is an aggregation over a matrix of 3x3. This follows the ratio between the nominal 
+    products at 333m (1/336) and the 1 km (1/112) grid. Other kernels are selectable so users can choose which best suits 
+    their purpose keeping in mind that, even if the pyramidal 5x5 (5x5_P) has achieved better results, only the 3x3 is
+    considered the official one.
     '''
     client = Client()
 
