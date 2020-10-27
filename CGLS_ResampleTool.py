@@ -210,15 +210,15 @@ def _aoi(da, ds, AOI):
 
         adj_ext = bnd_box_adj(AOI)
         try:
-            da = da.sel(lon=slice(adj_ext[0], adj_ext[2]), lat=slice(adj_ext[1], adj_ext[3]))
+            return da.sel(lon=slice(adj_ext[0], adj_ext[2]), lat=slice(adj_ext[1], adj_ext[3]))
         except Exception as ex:
             template = "An exception of type {0} occurred. Arguments:\n{1!r}"
             message = template.format(type(ex).__name__, ex.args)
             print(message)
             raise sys.exit(1)
     else:
-        da = da.shift(lat=1, lon=1)
-    return da
+        return da
+        # da = da.shift(lat=1, lon=1)
 
 
 def _date_extr(path):
@@ -229,10 +229,89 @@ def _date_extr(path):
     return date, date_h
 
 
-def _resampler(path, my_ext, plot, out_folder):
-    client = Client()
+def _kernel_sel(k_type):
+    # sum kernel
+
+    if '3' in k_type:
+        sum_k = np.repeat(1.0, 3 ** 2).reshape(3, 3)
+        val_thresh = 5
+    elif '5' in k_type:
+        sum_k = np.repeat(1.0, 5 ** 2).reshape(5, 5)
+        val_thresh = 15
+    elif '7' in k_type:
+        sum_k = np.repeat(1.0, 7 ** 2).reshape(7, 7)
+        val_thresh = 30
+
+    if not any([substring in k_type.lower() for substring in ['t', 'p', 'g']]):
+        if k_type == '3x3':
+            size = 3
+        elif k_type == '5x5':
+            size = 5
+        elif k_type == '7x7':
+            size = 7
+        return np.repeat(1.0, size**2).reshape(size, size) / size**2, sum_k, val_thresh
+    elif k_type.lower() == '3x3_g':
+        return np.array([[1,  2, 1],
+                         [2,  4, 2],
+                         [1,  2, 1]]) * 1/16, sum_k, val_thresh
+    elif k_type.lower() == '3x3_p':
+        return np.array([[1,  1, 1],
+                         [1,  2, 1],
+                         [1,  1, 1]]) * 1/10, sum_k, val_thresh
+    elif k_type.lower() == '5x5_g':
+        return np.array([[1,  4,  6,  4, 1],
+                         [4, 16, 24, 16, 4],
+                         [6, 24, 36, 24, 6],
+                         [4, 16, 24, 16, 4],
+                         [1, 4, 6, 4, 1]]) * 1/256, sum_k, val_thresh
+    elif k_type.lower() == '5x5_p':
+        return np.array([[1, 1, 1, 1, 1],
+                         [1, 2, 2, 2, 1],
+                         [1, 2, 3, 2, 1],
+                         [1, 2, 2, 2, 1],
+                         [1, 1, 1, 1, 1]]) * 1 / 35, sum_k, val_thresh
+    elif k_type.lower() == '5x5_t':
+        return np.array([[1, 1, 1, 1, 1],
+                         [1, 2, 2, 2, 1],
+                         [1, 2, 2, 2, 1],
+                         [1, 2, 2, 2, 1],
+                         [1, 1, 1, 1, 1]]) * 1 / 34, sum_k, val_thresh
+    elif k_type.lower() == '5x5_r':
+        return np.array([[.0025, .0125, .0200, .0125, .0025],
+                         [.0125, .0625, .1000, .0625, .0125],
+                         [.0200, .1000, .1600, .1000, .0200],
+                         [.0125, .0625, .1000, .0625, .0125],
+                         [.0025, .0125, .0200, .0125, .0025]]), sum_k, val_thresh
+    elif k_type.lower() == '7x7_g':
+        return np.array([[0.00000067, 0.00002292,  0.00019117,  0.00038771, 0.00019117, 0.00002292, 0.00000067],
+                         [0.00002292, 0.00078633,  0.00655965,  0.01330373, 0.00655965, 0.00078633, 0.00002292],
+                         [0.00019117, 0.00655965,  0.05472157,  0.11098164, 0.05472157, 0.00655965, 0.00019117],
+                         [0.00038771, 0.01330373,  0.11098164,  0.22508352, 0.11098164, 0.01330373, 0.00038771],
+                         [0.00019117, 0.00655965,  0.05472157,  0.11098164, 0.05472157, 0.00655965, 0.00019117],
+                         [0.00002292, 0.00078633,  0.00655965,  0.01330373, 0.00655965, 0.00078633, 0.00002292],
+                         [0.00000067, 0.00002292,  0.00019117,  0.00038771, 0.00019117, 0.00002292, 0.00000067]]), \
+                         sum_k, val_thresh
+    elif k_type.lower() == '7x7_p':
+        return np.array([[1, 1, 1, 1, 1, 1, 1],
+                         [1, 2, 2, 2, 2, 2, 1],
+                         [1, 2, 3, 3, 3, 2, 1],
+                         [1, 2, 3, 4, 3, 2, 1],
+                         [1, 2, 3, 3, 3, 2, 1],
+                         [1, 2, 2, 2, 2, 2, 1],
+                         [1, 1, 1, 1, 1, 1, 1]]) * 1 / 84, sum_k, val_thresh
+    elif k_type.lower() == '7x7_t':
+        return np.array([[1, 1, 1, 1, 1, 1, 1],
+                         [1, 2, 2, 2, 2, 2, 1],
+                         [1, 2, 3, 3, 3, 2, 1],
+                         [1, 2, 3, 3, 3, 2, 1],
+                         [1, 2, 3, 3, 3, 2, 1],
+                         [1, 2, 2, 2, 2, 2, 1],
+                         [1, 1, 1, 1, 1, 1, 1]]) * 1 / 83, sum_k, val_thresh
+
+
+def _resampler(path, my_ext, plot, out_folder, kernel):
     # Load the dataset
-    ds = xr.open_dataset(path, mask_and_scale=False, chunks={'lat': 1000, 'lon': 1000})
+    ds = xr.open_dataset(path, mask_and_scale=False, chunks={'lat': 5000, 'lon': 5000})
 
     # select parameters according to the product.
     da, param = _param(ds)
@@ -243,27 +322,56 @@ def _resampler(path, my_ext, plot, out_folder):
 
     # Algorithm core
     try:
-        # create the mask according to the fixed values
+        # create the valid values mask according to the fixed values
         da_msk = da.where(da <= param['DIGITAL_MAX'])
 
-        # mask the dataset according to the minumum required values
+        # create the valid values mask to be used in the minimum validity threshold
         vo = xr.where(da <= param['DIGITAL_MAX'], 1, 0)
-        vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
 
-        gaussina = True
-        if gaussina:
-            da_g = dask_image.ndfilters.gaussian_filter(da_msk.data, sigma=[1, 1])
-            coarsen = xr.DataArray(da_g[1:-1:3, 1:-1:3], coords=[('lat', vo_cnt.lat), ('lon', vo_cnt.lon)])
-
+        # create the Lat/Lon values array of the output
+        if any(my_ext):
+            frst_val = 1
+            lat_res = da.lat[frst_val:-1:3]
+            lon_res = da.lon[frst_val:-1:3]
         else:
-            # create the coarsen dataset
+            frst_val = 0
+            lat_res = da.lat[frst_val:-1:3]
+            lon_res = da.lon[frst_val:-1:3]
+
+        if kernel == '3x3' and my_ext == []:
+            # calculate the number of valid values
+            vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
+            val_thresh = 5
+
+            weights = np.repeat(1.0, 3 ** 2).reshape(3, 3) / 3 ** 2
+            da_g = dask_image.ndfilters.convolve(da_msk.data, weights, mode='nearest')
+            coarsen = xr.DataArray(da_g[frst_val:-1:3, frst_val:-1:3], coords=[('lat', vo_cnt.lat), ('lon', lon_res)])
+        elif kernel == '3x3':
+            vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
+            val_thresh = 5
             coarsen = da_msk.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).mean()
+
+        # elif kernel == 'Gauss':
+        #     vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
+        #     val_thresh = 5
+        #     da_g = dask_image.ndfilters.gaussian_filter(da_msk.data, sigma=2, order=0, mode='nearest')
+        #     coarsen = xr.DataArray(da_g[1:-1:3, 1:-1:3], coords=[('lat', vo_cnt.lat), ('lon', lon_res)])
+        else:
+            weights, sum_k, val_thresh = _kernel_sel(kernel)
+
+            # Valid values per cell
+            vo_cnt = dask_image.ndfilters.convolve(vo.data, sum_k, mode='nearest')
+            vo_cnt = xr.DataArray(vo_cnt[frst_val:-1:3, frst_val:-1:3], coords=[('lat', lat_res), ('lon', lon_res)])
+
+            # Coarsen values
+            da_g = dask_image.ndfilters.convolve(da_msk.data, weights, mode='nearest')
+            coarsen = xr.DataArray(da_g[frst_val:-1:3, frst_val:-1:3], coords=[('lat', lat_res), ('lon', lon_res)])
 
         # force results to integer
         coarsen_int = np.rint(coarsen)
 
         # impose the minimum number of observations
-        da_r = coarsen_int.where(vo_cnt >= 5)
+        da_r = coarsen_int.where(vo_cnt >= val_thresh)
 
         # force nan to int
         da_r = xr.where(np.isnan(da_r), 255, coarsen_int)
@@ -289,11 +397,11 @@ def _resampler(path, my_ext, plot, out_folder):
         prmts = dict({param['product']: {'dtype': 'i4', 'zlib': 'True', 'complevel': 4}})
 
         name = param['product']
-        if not gaussina:
+        if not kernel == 'Gauss':
             if len(my_ext) != 0:
-                file_name = f'CGLS_{name}_{date}_1KM_Resampled_AOI.nc'
+                file_name = f'CGLS_{name}_{date}_1KM_Resampled_{kernel}_AOI.nc'
             else:
-                file_name = f'CGLS_{name}_{date}_1KM_Resampled_.nc'
+                file_name = f'CGLS_{name}_{date}_1KM_Resampled_{kernel}.nc'
         else:
             if len(my_ext) != 0:
                 file_name = f'CGLS_{name}_{date}_1KM_Resampled_G_AOI.nc'
@@ -332,7 +440,6 @@ def main():
         [1] https://land.copernicus.eu/global/themes/vegetation
         [2] https://github.com/xavi-rp/ResampleTool_notebook/blob/master/Resample_Report_v2.5.pdf
     """
-
     '''
     Instructions:
     The tool is able to process act in different way according to the necessity
@@ -344,47 +451,57 @@ def main():
       Credential can be obtained here https://land.copernicus.vgt.vito.be/PDF/portal/Application.html#Home 
       through the Register form (on the upper right part of the page)
     '''
+    client = Client()
 
-    path = r'D:\Data\CGL_subproject_coarse_res\04_ndvi\300\2019'
+    path = r'D:\Data\CGL_subproject_coarse_res\03_fapar\2019'
 
-    # define the output folder
-    out_folder = r'F:\EUROPE_2019'
+    g = ['3x3', '3x3_G', '3x3_P', '5x5', '5x5_G', '5x5_P', '5x5_T', '7x7', '7x7_G', '7x7_P', '7x7_T']
 
-    # Define the credential for the Copernicus Global Land repository
-    user = ''
-    psw = ''
+    for i in g:
+        # define the output folder
+        out_folder = os.path.join(r'F:\FAPAR\AMAZONIA_2019', i)
 
-    # Define the AOI
-    # Coordinates are expressed in Decimal degrees (DD)
-    # expressed according to [Upper left long, lat, Lower right long, lat] schema
+        # Define the credential for the Copernicus Global Land repository
+        user = ''
+        psw = ''
 
-    AOI = [-18.58, 62.95, 51.57, 28.5]
+        # Define the AOI
+        # Coordinates are expressed in Decimal degrees (DD)
+        # expressed according to [Upper left long, lat, Lower right long, lat] schema
 
-    # Define if plot results or not
-    plot = False
+        # AOI = [-18.58, 62.95, 51.57, 28.5]  # Europe
+        AOI = [-70.0, -0.2, -63.0, -5.5]  # Amazonia
+        # AOI = [-17.6, 23.6, 16.3, 1.5]  # WAfrica
+        # AOI = []
 
-    # Processing
-    if path == '':
-        # Download and process
-        assert user, 'User ID is empty'
-        assert psw, 'Password is empty'
+        # define covariance kernel or coarsen aggregation resolution
+        kernel = i
 
-        path = _downloader(user, psw, out_folder)
-        _resampler(path, AOI, plot, out_folder)
-    elif os.path.isfile(path):
-        # Single file process
-        _resampler(path, AOI, plot, out_folder)
-    elif os.path.isdir(path):
-        # Multiprocessing for local files
-        if not os.listdir(path):
-            print("Directory is empty")
-        else:
-            for filename in os.listdir(path):
-                if filename.endswith(".nc"):
-                    path_ = os.path.join(path, filename)
-                    _resampler(path_, AOI, plot, out_folder)
+        # Define if plot results or not
+        plot = False
 
-    print('Conversion done')
+        # Processing
+        if path == '':
+            # Download and process
+            assert user, 'User ID is empty'
+            assert psw, 'Password is empty'
+
+            path = _downloader(user, psw, out_folder)
+            _resampler(path, AOI, plot, out_folder, kernel)
+        elif os.path.isfile(path):
+            # Single file process
+            _resampler(path, AOI, plot, out_folder, kernel)
+        elif os.path.isdir(path):
+            # Multiprocessing for local files
+            if not os.listdir(path):
+                print("Directory is empty")
+            else:
+                for filename in os.listdir(path):
+                    if filename.endswith(".nc"):
+                        path_ = os.path.join(path, filename)
+                        _resampler(path_, AOI, plot, out_folder, kernel)
+
+        print('Conversion done!')
 
 
 if __name__ == '__main__':
