@@ -459,55 +459,52 @@ def main():
     '''
     client = Client()
 
-    path = r'D:\Data\CGL_subproject_coarse_res\03_fapar\2019'
+    path = r''
 
-    g = ['3x3', '3x3_G', '3x3_P', '5x5', '5x5_G', '5x5_P', '5x5_T', '7x7', '7x7_G', '7x7_P', '7x7_T']
+    # Available Kernels ['3x3', '3x3_G', '3x3_P', '5x5', '5x5_G', '5x5_P', '5x5_T', '7x7', '7x7_G', '7x7_P', '7x7_T']
+    i = '3x3'
 
-    for i in g:
-        # define the output folder
-        out_folder = os.path.join(r'F:\FAPAR\AMAZONIA_2019', i)
+    # define the output folder
+    out_folder = os.path.join(r'F:\FAPAR\AMAZONIA_2019', i)
 
-        # Define the credential for the Copernicus Global Land repository
-        user = ''
-        psw = ''
+    # Define the credential for the Copernicus Global Land repository
+    user = ''
+    psw = ''
 
-        # Define the AOI
-        # Coordinates are expressed in Decimal degrees (DD)
-        # expressed according to [Upper left long, lat, Lower right long, lat] schema
+    # Define the AOI
+    # Coordinates are expressed in Decimal degrees (DD)
+    # expressed according to [Upper left long, lat, Lower right long, lat] schema
+    # es: AOI = [-18.58, 62.95, 51.57, 28.5]  # Europe
+    AOI = None
 
-        # AOI = [-18.58, 62.95, 51.57, 28.5]  # Europe
-        AOI = [-70.0, -0.2, -63.0, -5.5]  # Amazonia
-        # AOI = [-17.6, 23.6, 16.3, 1.5]  # WAfrica
-        # AOI = []
+    # define covariance kernel or coarsen aggregation resolution
+    kernel = i
 
-        # define covariance kernel or coarsen aggregation resolution
-        kernel = i
+    # Define if plot results or not
+    plot = False
 
-        # Define if plot results or not
-        plot = False
+    # Processing
+    if path == '':
+        # Download and process
+        assert user, 'User ID is empty'
+        assert psw, 'Password is empty'
 
-        # Processing
-        if path == '':
-            # Download and process
-            assert user, 'User ID is empty'
-            assert psw, 'Password is empty'
+        path = _downloader(user, psw, out_folder)
+        _resampler(path, AOI, plot, out_folder, kernel)
+    elif os.path.isfile(path):
+        # Single file process
+        _resampler(path, AOI, plot, out_folder, kernel)
+    elif os.path.isdir(path):
+        # Multiprocessing for local files
+        if not os.listdir(path):
+            print("Directory is empty")
+        else:
+            for filename in os.listdir(path):
+                if filename.endswith(".nc"):
+                    path_ = os.path.join(path, filename)
+                    _resampler(path_, AOI, plot, out_folder, kernel)
 
-            path = _downloader(user, psw, out_folder)
-            _resampler(path, AOI, plot, out_folder, kernel)
-        elif os.path.isfile(path):
-            # Single file process
-            _resampler(path, AOI, plot, out_folder, kernel)
-        elif os.path.isdir(path):
-            # Multiprocessing for local files
-            if not os.listdir(path):
-                print("Directory is empty")
-            else:
-                for filename in os.listdir(path):
-                    if filename.endswith(".nc"):
-                        path_ = os.path.join(path, filename)
-                        _resampler(path_, AOI, plot, out_folder, kernel)
-
-        print('Conversion done!')
+    print('Conversion done!')
 
 
 if __name__ == '__main__':
