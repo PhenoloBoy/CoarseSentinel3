@@ -230,7 +230,7 @@ def _date_extr(path):
 
 
 def _kernel_sel(k_type):
-    # sum kernel
+    # Kernels
 
     if '3' in k_type:
         sum_k = np.repeat(1.0, 3 ** 2).reshape(3, 3)
@@ -351,11 +351,6 @@ def _resampler(path, my_ext, plot, out_folder, kernel):
             val_thresh = 5
             coarsen = da_msk.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).mean()
 
-        # elif kernel == 'Gauss':
-        #     vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
-        #     val_thresh = 5
-        #     da_g = dask_image.ndfilters.gaussian_filter(da_msk.data, sigma=2, order=0, mode='nearest')
-        #     coarsen = xr.DataArray(da_g[1:-1:3, 1:-1:3], coords=[('lat', vo_cnt.lat), ('lon', lon_res)])
         else:
             weights, sum_k, val_thresh = _kernel_sel(kernel)
 
@@ -461,7 +456,15 @@ def main():
 
     path = r''
 
+    '''
+    Kernels: 
+    # iXi -> Kernel's shape 
+    # _G -> Gauss
+    # _P -> Pyramidal
+    # _T -> Truncated pyramidal 
     # Available Kernels ['3x3', '3x3_G', '3x3_P', '5x5', '5x5_G', '5x5_P', '5x5_T', '7x7', '7x7_G', '7x7_P', '7x7_T']
+    '''
+
     i = '3x3'
 
     # define the output folder
@@ -475,7 +478,7 @@ def main():
     # Coordinates are expressed in Decimal degrees (DD)
     # expressed according to [Upper left long, lat, Lower right long, lat] schema
     # es: AOI = [-18.58, 62.95, 51.57, 28.5]  # Europe
-    AOI = None
+    AOI = []
 
     # define covariance kernel or coarsen aggregation resolution
     kernel = i
