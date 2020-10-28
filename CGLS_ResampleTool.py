@@ -344,8 +344,15 @@ def _resampler(path, my_ext, plot, out_folder, kernel):
             val_thresh = 5
 
             weights = np.repeat(1.0, 3 ** 2).reshape(3, 3) / 3 ** 2
-            da_g = dask_image.ndfilters.convolve(da_msk.data, weights, mode='nearest')
-            coarsen = xr.DataArray(da_g[frst_val:-1:3, frst_val:-1:3], coords=[('lat', vo_cnt.lat), ('lon', lon_res)])
+
+            if hasattr(da_msk, 'time'):
+                data = da_msk.data[0]
+            else:
+                data = da_msk.data
+
+            da_g = dask_image.ndfilters.convolve(data, weights, mode='nearest')
+            coarsen = xr.DataArray(da_g[frst_val:-1:3, frst_val:-1:3], coords=[('lat', vo_cnt.lat),
+                                                                               ('lon', vo_cnt.lon)])
         elif kernel == '3x3':
             vo_cnt = vo.coarsen(lat=3, lon=3, boundary='trim', keep_attrs=False).sum()
             val_thresh = 5
@@ -452,9 +459,8 @@ def main():
     their purpose keeping in mind that, even if the pyramidal 5x5 (5x5_P) has achieved better results, only the 3x3 is
     considered the official one.
     '''
-    client = Client()
 
-    path = r''
+    path = r'D:\data\Resample\c_gls_LAI300_201901100000_GLOBE_PROBAV_V1.0.1.nc'
 
     '''
     Kernels: 
@@ -468,7 +474,7 @@ def main():
     i = '3x3'
 
     # define the output folder
-    out_folder = os.path.join(r'F:\FAPAR\AMAZONIA_2019', i)
+    out_folder = r'D:\tmp'
 
     # Define the credential for the Copernicus Global Land repository
     user = ''
@@ -486,33 +492,34 @@ def main():
     # Define if plot results or not
     plot = False
 
-    # Processing
-    if path == '':
-        # Download and process
-        assert user, 'User ID is empty'
-        assert psw, 'Password is empty'
+    with Client() as client:
+        # Processing
+        if path == '':
+            # Download and process
+            assert user, 'User ID is empty'
+            assert psw, 'Password is empty'
 
-        path = _downloader(user, psw, out_folder)
-        _resampler(path, AOI, plot, out_folder, kernel)
-    elif os.path.isfile(path):
-        # Single file process
-        _resampler(path, AOI, plot, out_folder, kernel)
-    elif os.path.isdir(path):
-        # Multiprocessing for local files
-        if not os.listdir(path):
-            print("Directory is empty")
-        else:
-            for filename in os.listdir(path):
-                if filename.endswith(".nc"):
-                    path_ = os.path.join(path, filename)
-                    _resampler(path_, AOI, plot, out_folder, kernel)
-
-    print('Conversion done!')
+            path = _downloader(user, psw, out_folder)
+            _resampler(path, AOI, plot, out_folder, kernel)
+        elif os.path.isfile(path):
+            # Single file process
+            _resampler(path, AOI, plot, out_folder, kernel)
+        elif os.path.isdir(path):
+            # Multiprocessing for local files
+            if not os.listdir(path):
+                print("Directory is empty")
+            else:
+                for filename in os.listdir(path):
+                    if filename.endswith(".nc"):
+                        path_ = os.path.join(path, filename)
+                        _resampler(path_, AOI, plot, out_folder, kernel)
+        print('Conversion complete')
+    print('Workers stopped')
 
 
 if __name__ == '__main__':
     try:
-        print('Copernics Global Land Resampler started')
+        print('\nCopernics Global Land Resampler started')
         main()
     except KeyboardInterrupt:
         print('Process killed by user')
