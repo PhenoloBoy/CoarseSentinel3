@@ -226,6 +226,13 @@ def _date_extr(path):
     pos = [pos for pos, char in enumerate(tail) if char == '_'][2]
     date = tail[pos + 1: pos + 9]
     date_h = pd.to_datetime(date, format='%Y%m%d')
+    if date_h.day <= 10:
+        date_h = pd.datetime(date_h.year, date_h.month, 1)
+    elif 10 < date_h.day <= 20:
+        date_h = pd.datetime(date_h.year, date_h.month, 11)
+    else:
+        date_h = pd.datetime(date_h.year, date_h.month, 21)
+
     return date, date_h
 
 
@@ -378,7 +385,7 @@ def _resampler(path, my_ext, plot, out_folder, kernel):
         # force nan to int
         da_r = xr.where(np.isnan(da_r), 255, coarsen_int)
 
-        if not da_r.time:
+        if not hasattr(da_r, 'time'):
             da_r = da_r.assign_coords({'time': date_h})
             da_r = da_r.expand_dims(dim='time', axis=0)
 
