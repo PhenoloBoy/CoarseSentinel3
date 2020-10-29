@@ -5,7 +5,7 @@ import re
 import sys
 
 import dask_image.ndfilters
-from distributed import Client
+from distributed import Client, LocalCluster
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -227,11 +227,11 @@ def _date_extr(path):
     date = tail[pos + 1: pos + 9]
     date_h = pd.to_datetime(date, format='%Y%m%d')
     if date_h.day <= 10:
-        date_h = pd.datetime(date_h.year, date_h.month, 1)
+        date_h = dt.datetime(date_h.year, date_h.month, 1)
     elif 10 < date_h.day <= 20:
-        date_h = pd.datetime(date_h.year, date_h.month, 11)
+        date_h = dt.datetime(date_h.year, date_h.month, 11)
     else:
-        date_h = pd.datetime(date_h.year, date_h.month, 21)
+        date_h = dt.datetime(date_h.year, date_h.month, 21)
 
     return date, date_h
 
@@ -477,7 +477,7 @@ def main():
     # _T -> Truncated pyramidal 
     # Available Kernels ['3x3', '3x3_G', '3x3_P', '5x5', '5x5_G', '5x5_P', '5x5_T', '7x7', '7x7_G', '7x7_P', '7x7_T']
     '''
-
+    # define the resampling method
     i = '3x3'
 
     # define the output folder
@@ -499,7 +499,9 @@ def main():
     # Define if plot results or not
     plot = False
 
-    with Client() as client:
+    cluster = LocalCluster()
+    with Client(cluster) as client:
+        print('Process progression can now be followed in a browser @ localhost:8786')
         # Processing
         if path == '':
             # Download and process
